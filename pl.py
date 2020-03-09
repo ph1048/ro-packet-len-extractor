@@ -1,3 +1,4 @@
+#!/usr/bin/python2.7
 import pefile
 import sys
 import collections
@@ -45,6 +46,54 @@ def dump_packets(code_dump, code_addr):
                     last_imm = int(i.operands[1].value.imm)
             
     return pkts
+
+def find_enter_packet(buf, base, sigaddr):
+    md = Cs(CS_ARCH_X86, CS_MODE_32)
+    md.detail = True
+    md.skipdata = True
+    disasm = md.disasm(buf, base)
+    found_push = False
+    skipped_ins = 0
+    for i in disasm:
+        if skipped_ins > 20:
+            break
+        if found_push == True:
+            skipped_ins += 1
+            if i.mnemonic == "mov" and i.op_str.find("word ptr [") == 0:
+                if i.operands[1].type == X86_OP_IMM:
+                    return int(i.operands[1].value.imm)
+        if i.mnemonic == "push":
+            if i.operands[0].type == X86_OP_IMM and int(i.operands[0].value.imm) == sigaddr:
+                found_push = True
+    return 0
+
+def find_enter_sig(buf, base):
+    #print len(buf)
+    off = str(buf).find("PACKET_CZ_ENTER")
+    if off == -1:
+        off = 0
+    else:
+        off += base
+    return off
+
+def get_enter_packet(file_path):
+    pe = pefile.PE(file_path)
+    addr = 0
+    for section in pe.sections:
+        if section.Name.find(".data") == 0:
+            data = section.get_data()
+            base = pe.OPTIONAL_HEADER.ImageBase + section.VirtualAddress
+            addr = find_enter_sig(data,base)
+            if addr != 0:
+                break
+    if addr == 0:
+        return 0
+    eop = pe.OPTIONAL_HEADER.AddressOfEntryPoint
+    code_section = pe.get_section_by_rva(eop)
+    code_dump = code_section.get_data()
+    code_addr = pe.OPTIONAL_HEADER.ImageBase + code_section.VirtualAddress
+    return find_enter_packet(code_dump, code_addr, addr)
+    
 
 def get_pks(file_path):
     pe = pefile.PE(file_path)
@@ -101,8 +150,12 @@ def dump(exe):
         print '{:04X} {:d}'.format(pkt, ordered[pkt])
     #
 
+def enter(exe):
+    pkt = get_enter_packet(exe)
+    print 'Enter packet {:04X}'.format(pkt)
+
 if len(sys.argv) < 2:
-    print "usage: pl.py dump|diff files"
+    print "usage: pl.py dump|diff|enter args"
     exit()
 
 mode = sys.argv[1]
@@ -116,7 +169,12 @@ elif mode == "dump":
         print "usage: pl.py dump client_or_server.exe"
         exit()
     dump(sys.argv[2])
+elif mode == "enter":
+    if len(sys.argv) < 3:
+        print "usage: pl.py enter client.exe"
+        exit()
+    enter(sys.argv[2])
 else:
-    print "usage: pl.py dump|diff files"
+    print "usage: pl.py dump|diff|enter args"
     exit()
 
