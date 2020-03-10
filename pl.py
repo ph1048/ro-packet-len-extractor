@@ -126,11 +126,13 @@ def diff(client,server):
 
     client_does_not_have = 0
     server_does_not_have = 0
+    diffs = 0
 
     for pk in p1:
         if pk in p2:
             if not p1[pk] == p2[pk]:
-                print("Pk %x: Client %d Server %d" % (pk, p1[pk], p2[pk]))
+                print '{:04X}: Client {:d} Server {:d}'.format(pk, p1[pk], p2[pk])
+                diffs += 1
         else:
             server_does_not_have += 1
 
@@ -138,7 +140,7 @@ def diff(client,server):
         if pk not in p1:
             client_does_not_have += 1
             #print("Pk %x(%d): client does not have it" % (pk, p2[pk]))
-
+    print("%d diffs" % (diffs))
     print("Also: client does not have %d packets" % (client_does_not_have))
     print("Also: server does not have %d packets" % (server_does_not_have))
 
